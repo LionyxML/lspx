@@ -4,7 +4,7 @@
   "tasks": {
     "dev": "deno -A jsr:@effection-contrib/watch deno task compile",
     "test": "deno test -A",
-    "compile": "deno compile -o lspx --allow-env --allow-run main.ts",
+    "compile": "deno compile -o dist/lspx --allow-env --allow-run main.ts",
     "build:jsr": "deno -A tasks/build-jsr.ts"
   },
   "imports": {
