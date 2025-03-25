@@ -6,28 +6,77 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
-  publish-jsr:
+  publish:
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-apple-darwin
+          - aarch64-unknown-linux-gnu
+          - aarch64-apple-darwin
+
     steps:
-      - name: checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: setup deno
+      - name: Setup Deno
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
 
       - name: Get Version
         id: vars
-        run: echo ::set-output name=version::$(echo ${{github.ref_name}} | sed 's/^v//')
+        run: echo ::set-output name=version::$(echo ${{ github.ref_name }} | sed 's/^v//')
 
       - name: Build JSR
-        run: deno task build:jsr ${{steps.vars.outputs.version}}
+        run: deno task build:jsr ${{ steps.vars.outputs.version }}
 
-      - name: Publish JSR
-        run: deno publish --allow-dirty --token=${{secrets.JSR_TOKEN}}
+      - name: Compile Binary
+        run: |
+          mkdir -p dist
+          deno compile --alow-env --alow-run --target ${{ matrix.target }} --output dist/lspx main.ts
+        continue-on-error: true
+
+      - name: Ensure correct permissions
+        run: chmod 755 dist/lspx
+
+      - name: Create Archive for Target
+        run: |
+          target_file="dist/lspx-${{ matrix.target }}.tar.gz"
+          tar -czf $target_file -C dist lspx
+        continue-on-error: true
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lspx-${{ matrix.target }}
+          path: dist/*
+        continue-on-error: true
+
+  release:
+    name: Create GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*.tar.gz
+          token: ${{ secrets.GITHUB_TOKEN }}
